@@ -13,24 +13,106 @@ settings:
   encoding: utf-8
   parquet_engine: pyarrow
   duckdb_file: data/project.duckdb   # single file DB for the project
+  rate_limit_seconds: 1.5            # polite delay between HTTP requests
 
 sources:
-  # Define each data source here before ingesting.
-  # url:        full URL to fetch
-  # type:       html_table | html_scrape | csv | json
-  # table_index: (html_table only) zero-based index of the target <table>
-  # js_render:  true if the page requires Playwright (JS-rendered)
-  # Example:
-  # fatalities:
-  #   url: https://example.gov/data/fatalities
-  #   type: html_table
-  #   table_index: 0
-  #   js_render: false
+  # -------------------------------------------------------------------------
+  # BLS Current Population Survey (CPS) — Labor Force Statistics (LN series)
+  # Bulk flat-file download: tab-separated, monthly, 1948–present
+  # Contains: unemployment rate, level, labor force by age/sex/race
+  # -------------------------------------------------------------------------
+  bls_ln:
+    base_url: "https://download.bls.gov/pub/time.series/LN"
+    type: bulk_download
+    files:
+      - "ln.data.1.AllData"       # all series data (large, ~200MB)
+      - "ln.series"               # series definitions (series_id → demographics)
+      - "ln.period"               # period codes (M01–M13)
+      - "ln.footnote"             # footnote definitions
+    notes: >
+      LN series encodes demographics in the series_id string.
+      Key prefixes: LNS14 = unemployment rate, LNS13 = unemployment level,
+      LNS11 = civilian labor force level.
+      Demographic segments: age, sex, race, education, marital status.
+
+  # -------------------------------------------------------------------------
+  # BLS Local Area Unemployment Statistics (LAUS — LA series)
+  # State + county + metro monthly unemployment rates, 1976–present
+  # -------------------------------------------------------------------------
+  bls_la:
+    base_url: "https://download.bls.gov/pub/time.series/la"
+    type: bulk_download
+    files:
+      - "la.data.0.CurrentU90-94"   # seasonally adjusted, older
+      - "la.data.0.CurrentU95-99"
+      - "la.data.0.CurrentU00-04"
+      - "la.data.0.CurrentU05-09"
+      - "la.data.0.CurrentU10-14"
+      - "la.data.0.CurrentU15-19"
+      - "la.data.0.CurrentU20-24"
+      - "la.data.0.CurrentU25-29"
+      - "la.area"                   # area FIPS codes
+      - "la.series"                 # series definitions
+      - "la.area_type"              # area type codes (state, county, metro)
+      - "la.measure"                # measure codes (unemployment rate, level, etc.)
+      - "la.period"                 # period codes
+      - "la.footnote"               # footnote definitions
+    notes: >
+      LA series covers states, counties, MSAs.
+      Measure codes: 03 = unemployment rate, 04 = unemployment level,
+      05 = employment level, 06 = labor force level.
+      Area type: A = state, B = metro, F = county.
+
+  # -------------------------------------------------------------------------
+  # BLS Expanded State Employment Status Demographic Data
+  # Annual cross-tabs: state × age group × race/ethnicity
+  # -------------------------------------------------------------------------
+  bls_expanded_state:
+    base_url: "https://www.bls.gov/lau"
+    type: xlsx
+    files:
+      - url: "https://www.bls.gov/lau/ex14tables.htm"
+        notes: "Index page listing available Excel tables by year"
+    notes: >
+      Annual averages. Combined age groups (16-24, 25-54, 55+) by
+      race/ethnicity (White, Black, Hispanic) at state level.
+      Available from ~2004. Individual Excel files per year.
+
+  # -------------------------------------------------------------------------
+  # BLS Alternative Measures of Underutilization (U-1 through U-6)
+  # Shows broader unemployment beyond the headline U-3 rate
+  # -------------------------------------------------------------------------
+  bls_alternative_measures:
+    base_url: "https://download.bls.gov/pub/time.series/LN"
+    type: bulk_download
+    series_ids:
+      - "LNS13327709"   # U-6 total (seasonally adjusted)
+      - "LNS14023621"   # U-3 total (seasonally adjusted, official rate)
+      - "LNS13327708"   # U-5 total
+      - "LNS13327707"   # U-4 total
+    notes: >
+      U-3 = official unemployment rate.
+      U-6 = total unemployed + marginally attached + employed part-time
+      for economic reasons. The U3-U6 gap reveals "hidden" unemployment.
+
+  # -------------------------------------------------------------------------
+  # BLS CPS Methodology Documentation
+  # Key papers documenting measurement changes
+  # -------------------------------------------------------------------------
+  methodology_docs:
+    type: reference
+    urls:
+      - url: "https://www.bls.gov/opub/mlr/2018/article/the-current-population-survey-tracking-unemployment.htm"
+        description: "75-year CPS history (2018 Monthly Labor Review)"
+      - url: "https://www.bls.gov/cps/duration.htm"
+        description: "2011 duration cap change documentation"
+      - url: "https://www.bls.gov/lau/gen-5-changes-in-2021.htm"
+        description: "2021 LAUS model-based estimation changes"
 
 export:
   formats:
     - csv
     - xlsx
     - parquet
-  include_codebook: true       # generate a column-description markdown alongside each export
-  strip_pii_columns: []        # list column names to drop before packaging
+  include_codebook: true
+  strip_pii_columns: []
