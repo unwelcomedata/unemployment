@@ -94,10 +94,48 @@ apples-to-oranges comparisons.
 - **Known controversies / debates:** None.
 - **Retrieved:** 2026-08-27
 
-<!-- Pending (see workspace TODO.md): national demographic series (U3–U6 + by age/sex/race),
-     to be loaded as `unemployment_national`. Document its definitions/breaks here when added —
-     the U-4/U-5/U-6 measures widen the "unemployed" definition and must be labeled distinctly
-     from the U-3 headline rate above. -->
+### BLS CPS — National Unemployment by Demographics
+- **Publisher:** U.S. Bureau of Labor Statistics, Current Population Survey (CPS)
+- **URL:** https://api.bls.gov/publicAPI/v2/timeseries/data/ (BLS Public Data API v2)
+- **Format:** JSON (API), loaded to DuckDB table `unemployment_national`
+- **License:** Public domain (U.S. government work)
+- **Fields used:** series_id, label, category, year, month, date, value (unemployment rate %)
+- **Coverage:** National, monthly, 1948–2026; breakdowns by age/sex/race begin later (see breaks)
+- **How the source collects the data:** Monthly household survey of ~60,000 U.S. households.
+  Respondents are classified as employed, unemployed, or not in the labor force based on their
+  reported activity during the reference week. The CPS is the gold standard for labor-force
+  measurement — it captures people not receiving unemployment insurance (self-employed, gig,
+  those who exhausted benefits) that administrative records miss.
+- **How the source defines the data:**
+  - **U-3 (official rate):** Unemployed = without a job, available to work, and actively searched
+    in the past 4 weeks ÷ civilian labor force. **This is the headline rate.**
+  - **U-4:** Adds discouraged workers (gave up looking because they believe no jobs available).
+  - **U-5:** Adds all marginally attached workers (wanted work, available, looked in past year).
+  - **U-6 (broadest):** Adds people working part-time for economic reasons (involuntary part-time).
+  - **Never compare U-3 and U-6 directly** — they measure different populations by design.
+  - Demographic breakdowns (by race, age, sex) all use the U-3 definition.
+- **Methodology changes / series breaks:**
+  - **U-4/U-5/U-6 begin January 1994** — alternative measures introduced that year.
+  - **Asian series begins January 2003** (new CPS race category).
+  - **Hispanic/Latino series begins January 1973.**
+  - **Black series begins January 1972.**
+  - **White series begins January 1954.**
+  - **1994 CPS redesign** — the most significant methodological update; introduced new questions
+    on job-search methods and duration. The BLS published bridging factors; the overall U-3 rate
+    is broadly comparable before/after but the change affects some sub-series.
+  - **2003 race-category revision** — "Asian or Pacific Islander" was split; Asian and NHOPI became
+    separate categories. The Asian series only begins after this change.
+  - **55-64 year and 65+ year age-bracket series** (LNS14000095, LNS14000097) returned no data
+    from the API — these series IDs may have been superseded in recent BLS catalog updates. Not a
+    critical gap for the core story; the 45-54 series is the oldest age group available.
+- **Known controversies / debates:**
+  - U-3 regularly criticized for understating slack — it excludes discouraged and underemployed
+    workers (addressed by U-6). Use U-6 alongside U-3 when the story is about "hidden" unemployment.
+  - Racial unemployment rates are based on self-identified race from the CPS survey, not the same
+    classification scheme across all years.
+- **Notes:** 18 of 20 requested series returned data. All seasonally adjusted (X-13ARIMA-SEATS).
+  Raw API responses saved to `data/raw/bls_api_data.parquet`.
+- **Retrieved:** 2026-09-28
 
 ---
 
@@ -111,6 +149,13 @@ apples-to-oranges comparisons.
 - **LAUS state rates are modeled and get revised** (2018 & 2021 methodology changes; ongoing
   re-estimation). Re-pull the full series rather than splicing extracts from different dates.
 - **U-3 vs U-4…U-6** are different definitions of "unemployed" — never compare across them.
+- **U-4/U-5/U-6 only go back to 1994** — charts using these can't show pre-1994 history.
+- **Race breakdowns start at different years:** White 1954, Black 1972, Hispanic 1973, Asian 2003.
+  Cross-race comparisons must start from the latest series' first year.
+- **1994 CPS redesign** — job-search questions changed. Rates are broadly comparable but some
+  sub-series (duration, reason) are not. Flag this on any pre/post-1994 trend chart.
+- **COVID 2020** — April 2020 14.8% peak is a genuine anomaly. Not a definition break,
+  but note it as anomalous on any multi-decade chart so it doesn't distort the visual range.
 
 ---
 
