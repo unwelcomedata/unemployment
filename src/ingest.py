@@ -451,6 +451,201 @@ def ingest_bls_api(
 
 
 # ---------------------------------------------------------------------------
+# BLS CPS annual household-data tables (cpsaat##) — PDF, race x education
+# ---------------------------------------------------------------------------
+# The race x education intersection of the unemployment rate is NOT available
+# as clean BLS API series (the API carries education-only and race-only series,
+# but not their cross-tab). BLS publishes that cross-tab in the annual household
+# table cpsaat07 ("Employment status ... 25 years and over by educational
+# attainment, sex, race, and Hispanic or Latino ethnicity").
+#
+# Access gotcha: every bls.gov /cps/ endpoint (.htm/.xlsx/.txt/.pdf) returns a
+# 403 (Akamai bot filter) to a plain requests.get with the project's default
+# headers. It is bypassed by sending a COMPLETE browser header set (Accept,
+# Referer, Sec-Fetch-*). The helper below adds those extra headers.
+# ---------------------------------------------------------------------------
+
+# Full browser header set that satisfies the bls.gov /cps/ Akamai filter.
+_BLS_CPS_HEADERS = {
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "image/avif,image/webp,image/apng,*/*;q=0.8,"
+        "application/signed-exchange;v=b3;q=0.7"
+    ),
+    "Referer": "https://www.bls.gov/cps/tables.htm",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+# cpsaat07 column x-coordinate (x0) → education level, confirmed from the 2024
+# PDF layout + the aa2004/aat7.txt column legend. We take the TOTAL columns for
+# the two higher tiers (x≈344, x≈474) and ignore their sub-columns.
+_CPSAAT07_EDU_COLUMNS = {
+    256: "Less than high school",
+    300: "High school, no college",
+    344: "Some college or associate degree",   # TOTAL (ignore sub-cols 387, 431)
+    474: "Bachelor's degree and higher",        # TOTAL (ignore sub-cols 518, 562)
+}
+
+# The race blocks we want from the table (section-header text → tidy label).
+_CPSAAT07_RACE_BLOCKS = {
+    "White": "White",
+    "BlackorAfricanAmerican": "Black",
+}
+
+
+def fetch_bls_cps_table(
+    url: str,
+    dest: Path,
+    rate_limit_seconds: float = 1.5,
+    timeout: int = 60,
+) -> Path:
+    """Download a bls.gov /cps/ annual table (PDF) to dest, verbatim.
+
+    Sends the full browser header set required to clear the Akamai bot filter
+    on bls.gov /cps/ endpoints (a plain requests.get 403s). The raw file is
+    streamed to ``dest`` unchanged — never transform in the ingest stage.
+
+    Args:
+        url:                 Direct cpsaat##.pdf URL.
+        dest:                Destination path under data/raw/.
+        rate_limit_seconds:  Polite delay before the request.
+        timeout:             Request timeout in seconds.
+
+    Returns:
+        The destination Path.
+    """
+    time.sleep(rate_limit_seconds)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    hdrs = {**_DEFAULT_HEADERS, **_BLS_CPS_HEADERS}
+    with requests.get(url, headers=hdrs, timeout=timeout, stream=True) as resp:
+        resp.raise_for_status()
+        with open(dest, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=65536):
+                f.write(chunk)
+    return dest
+
+
+def parse_cpsaat07(pdf_path: str | Path, year: int) -> pd.DataFrame:
+    """Parse the cpsaat07 PDF into tidy race × education unemployment-rate rows.
+
+    The table has no ruled borders, so we parse by word x-position (pdfplumber):
+    group words into lines by rounded ``top``, locate each race block's
+    "Unemployment rate" row, and read the 8 numeric columns at the known
+    x-coordinates, mapping the 4 we want (two tiers use the TOTAL column, their
+    sub-columns ignored).
+
+    Robustness: asserts exactly 8 numeric tokens on each race's unemployment-rate
+    row and that every parsed rate is a plausible 0–30 float, so a future BLS
+    layout change fails loudly rather than silently mis-mapping columns.
+
+    Args:
+        pdf_path: Path to the saved cpsaat07 PDF.
+        year:     Annual-average year the table represents (for the ``year`` col).
+
+    Returns:
+        Tidy DataFrame: year, race ('White'/'Black'), education_level (4 tiers),
+        unemployment_rate (float, percent).
+    """
+    import pdfplumber  # lazy import (installed in the data_projects kernel)
+
+    with pdfplumber.open(str(pdf_path)) as pdf:
+        page = pdf.pages[0]
+        words = page.extract_words()
+
+    # Group words into lines keyed by rounded vertical position.
+    lines: dict[int, list[dict]] = {}
+    for w in words:
+        key = round(w["top"])
+        lines.setdefault(key, []).append(w)
+
+    def _is_number(tok: str) -> bool:
+        try:
+            float(tok)
+            return True
+        except ValueError:
+            return False
+
+    # Find each race block's section-header line (collapsed-text match), then
+    # the first "Unemployment rate" row below it.
+    sorted_tops = sorted(lines)
+
+    def _line_text(top: int) -> str:
+        toks = sorted(lines[top], key=lambda w: w["x0"])
+        return "".join(t["text"] for t in toks)
+
+    records: list[dict] = []
+    for header_collapsed, race_label in _CPSAAT07_RACE_BLOCKS.items():
+        # Locate the section header line.
+        header_top = None
+        for top in sorted_tops:
+            if _line_text(top).replace(" ", "").startswith(header_collapsed):
+                header_top = top
+                break
+        if header_top is None:
+            raise ValueError(
+                f"cpsaat07 parse: could not find '{race_label}' block header "
+                f"('{header_collapsed}') — BLS layout may have changed."
+            )
+
+        # First "Unemployment rate" row strictly below the header.
+        ur_top = None
+        for top in sorted_tops:
+            if top <= header_top:
+                continue
+            txt = _line_text(top).replace(" ", "").lower()
+            if txt.startswith("unemploymentrate"):
+                ur_top = top
+                break
+        if ur_top is None:
+            raise ValueError(
+                f"cpsaat07 parse: no 'Unemployment rate' row found for "
+                f"'{race_label}' — BLS layout may have changed."
+            )
+
+        # Numeric tokens on that row, by x-position.
+        numeric = sorted(
+            [w for w in lines[ur_top] if _is_number(w["text"])],
+            key=lambda w: w["x0"],
+        )
+        if len(numeric) != 8:
+            raise ValueError(
+                f"cpsaat07 parse: expected 8 numeric columns on the "
+                f"'{race_label}' unemployment-rate row, found {len(numeric)} "
+                f"({[w['text'] for w in numeric]}) — BLS layout may have changed."
+            )
+
+        # Map the 4 wanted columns by nearest x within ±3 px.
+        for target_x, edu_level in _CPSAAT07_EDU_COLUMNS.items():
+            match = min(numeric, key=lambda w: abs(w["x0"] - target_x))
+            if abs(match["x0"] - target_x) > 3:
+                raise ValueError(
+                    f"cpsaat07 parse: no numeric column within 3px of x={target_x} "
+                    f"for '{race_label}'/{edu_level} — layout may have changed."
+                )
+            rate = float(match["text"])
+            if not (0.0 <= rate <= 30.0):
+                raise ValueError(
+                    f"cpsaat07 parse: implausible rate {rate} for "
+                    f"'{race_label}'/{edu_level} — layout may have changed."
+                )
+            records.append(
+                {
+                    "year": year,
+                    "race": race_label,
+                    "education_level": edu_level,
+                    "unemployment_rate": rate,
+                }
+            )
+
+    df = pd.DataFrame(records)
+    return df.sort_values(["race", "education_level"]).reset_index(drop=True)
+
+
+# ---------------------------------------------------------------------------
 # Key Series Definitions
 # ---------------------------------------------------------------------------
 
@@ -458,6 +653,7 @@ def ingest_bls_api(
 KEY_UNEMPLOYMENT_SERIES = {
     # Overall
     "LNS14000000": "Total, 16+",
+    "LNS14000024": "Total, 20+ (adults)",
     # By sex
     "LNS14000001": "Men, 16+",
     "LNS14000002": "Women, 16+",

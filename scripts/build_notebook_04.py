@@ -1,4 +1,11 @@
-"""Build 04-viz.ipynb for the unemployment project."""
+"""Build 04-viz.ipynb for the unemployment project.
+
+04-viz is a CONSUMER: it opens the DB read-only and renders the 7 charts from the
+chart-ready tables that 03-prepare built. It no longer builds any chart_* table
+(that work moved to 03-prepare). The chart configs — titles, subtitles,
+footnotes, colors, chart-2 vlines, chart-5 choropleth + DC callout, chart-7
+grouped columns — are UNCHANGED from the exploration-confirmed notebook.
+"""
 import nbformat
 from pathlib import Path
 
@@ -21,19 +28,25 @@ cells.append(nbformat.v4.new_markdown_cell("""\
 This notebook explores the unemployment data to understand the story and decide
 which angles are worth building as social charts.
 
+**It CONSUMES the chart-ready tables built in `03-prepare`** (`chart_headline`,
+`chart_u3_u6`, `chart_race`, `chart_youth`, `chart_state_map`,
+`chart_states_selected`, `chart_edu_race`) and renders them — it does **not**
+build any chart table itself. Run `03-prepare.ipynb` first; it is the writer and
+closes its connection, so this notebook opens the DB **read-only**.
+
 **Charts explored:**
 1. Headline U-3 rate — 1948–2026 (line)
-2. Official vs broad unemployment — U-3 vs U-6, 1994–2026 (two-line)
+2. Official vs broad unemployment — U-3 vs U-6, 1994–2026 (two-line, with methodology markers)
 3. Racial gap — White, Black, Hispanic, 1973–2026 (three-line)
-4. Youth unemployment — 16–19 vs overall, 1948–2026 (two-line)
-5. State rankings — current snapshot, all 51 states (ranked bars)
+4. Youth unemployment — teens (16–19) vs adults 20+, 1948–2026 (two-line)
+5. State unemployment — trailing 12-month average, all 51 states (choropleth)
 6. Selected states over time — CA, TX, FL, NY, MI, MA, 1976–2026 (multi-line)
 
 **⏸ AWAITING OWNER REVIEW** — no `06-viz-social` work starts until story/framing
 is locked here.
 """))
 
-# ── Cell 1 — setup ──────────────────────────────────────────────────────────
+# ── Cell 1 — setup (read-only) ───────────────────────────────────────────────
 cells.append(nbformat.v4.new_code_cell("""\
 import sys, os
 from pathlib import Path
@@ -57,135 +70,24 @@ from colors import c
 
 DB_PATH = "data/project.duckdb"
 
-# Open writable to build chart_ tables, then close and reopen read-only.
-con_rw = duckdb.connect(DB_PATH)
-print("Connected (rw). Tables:", [t[0] for t in con_rw.execute("SHOW TABLES").fetchall()])
-"""))
-
-# ── Cell 2 — build chart tables ──────────────────────────────────────────────
-cells.append(nbformat.v4.new_markdown_cell("""\
-## Build chart tables
-
-All SQL aggregations run in DuckDB. Annual averages are used for all line
-charts (cleaner than monthly for long time spans; monthly data remains
-in `unemployment_national_clean` for deeper cuts).
-"""))
-
-cells.append(nbformat.v4.new_code_cell("""\
-# ── Chart 1: Headline U-3 rate, annual averages 1948-2026 ───────────────────
-con_rw.execute("DROP TABLE IF EXISTS chart_headline")
-con_rw.execute(\"\"\"
-CREATE TABLE chart_headline AS
-SELECT year, ROUND(AVG(value), 2) AS rate
-FROM unemployment_national_clean
-WHERE series_id = 'LNS14000000'
-GROUP BY year ORDER BY year
-\"\"\")
-print("chart_headline:", con_rw.execute("SELECT MIN(year), MAX(year), COUNT(*) FROM chart_headline").fetchone())
-
-# ── Chart 2: U-3 vs U-6, annual averages 1994-2026 ──────────────────────────
-con_rw.execute("DROP TABLE IF EXISTS chart_u3_u6")
-con_rw.execute(\"\"\"
-CREATE TABLE chart_u3_u6 AS
-SELECT
-    year,
-    ROUND(AVG(CASE WHEN series_id = 'LNS14000000' THEN value END), 2) AS u3,
-    ROUND(AVG(CASE WHEN series_id = 'LNS13327709' THEN value END), 2) AS u6
-FROM unemployment_national_clean
-WHERE series_id IN ('LNS14000000', 'LNS13327709')
-  AND year >= 1994
-GROUP BY year ORDER BY year
-\"\"\")
-print("chart_u3_u6:", con_rw.execute("SELECT MIN(year), MAX(year), COUNT(*) FROM chart_u3_u6").fetchone())
-
-# ── Chart 3: Race comparison, annual averages 1973-2026 ─────────────────────
-con_rw.execute("DROP TABLE IF EXISTS chart_race")
-con_rw.execute(\"\"\"
-CREATE TABLE chart_race AS
-SELECT
-    year,
-    ROUND(AVG(CASE WHEN series_id = 'LNS14000003' THEN value END), 2) AS white,
-    ROUND(AVG(CASE WHEN series_id = 'LNS14000009' THEN value END), 2) AS hispanic,
-    ROUND(AVG(CASE WHEN series_id = 'LNS14000006' THEN value END), 2) AS black
-FROM unemployment_national_clean
-WHERE series_id IN ('LNS14000003', 'LNS14000006', 'LNS14000009')
-  AND year >= 1973
-GROUP BY year ORDER BY year
-\"\"\")
-print("chart_race:", con_rw.execute("SELECT MIN(year), MAX(year), COUNT(*) FROM chart_race").fetchone())
-
-# ── Chart 4: Youth vs total, annual averages 1948-2026 ──────────────────────
-con_rw.execute("DROP TABLE IF EXISTS chart_youth")
-con_rw.execute(\"\"\"
-CREATE TABLE chart_youth AS
-SELECT
-    year,
-    ROUND(AVG(CASE WHEN series_id = 'LNS14000000' THEN value END), 2) AS total,
-    ROUND(AVG(CASE WHEN series_id = 'LNS14000012' THEN value END), 2) AS youth_16_19
-FROM unemployment_national_clean
-WHERE series_id IN ('LNS14000000', 'LNS14000012')
-GROUP BY year ORDER BY year
-\"\"\")
-print("chart_youth:", con_rw.execute("SELECT MIN(year), MAX(year), COUNT(*) FROM chart_youth").fetchone())
-
-# ── Chart 5: State current rankings, most recent month ──────────────────────
-con_rw.execute("DROP TABLE IF EXISTS chart_state_current")
-con_rw.execute(\"\"\"
-CREATE TABLE chart_state_current AS
-WITH recent AS (
-    SELECT MAX(year) AS yr FROM unemployment_states_clean
-),
-recent_month AS (
-    SELECT MAX(month) AS mo FROM unemployment_states_clean
-    WHERE year = (SELECT yr FROM recent)
-)
-SELECT
-    state_name,
-    state_abbrev,
-    value AS rate
-FROM unemployment_states_clean
-WHERE year = (SELECT yr FROM recent)
-  AND month = (SELECT mo FROM recent_month)
-ORDER BY rate DESC
-\"\"\")
-n_states, yr, mo = con_rw.execute(
-    "SELECT COUNT(*), MAX(year), MAX(month) FROM chart_state_current WHERE 1=1"
-).fetchone()
-print(f"chart_state_current: {n_states} states, latest = {yr}-{mo:02d}")
-
-# ── Chart 6: Selected states over time, annual averages 1976-2026 ────────────
-SELECTED_STATES = ['California', 'Texas', 'Florida', 'New York', 'Michigan', 'Massachusetts']
-state_list = "', '".join(SELECTED_STATES)
-con_rw.execute("DROP TABLE IF EXISTS chart_states_selected")
-con_rw.execute(f\"\"\"
-CREATE TABLE chart_states_selected AS
-SELECT
-    year,
-    ROUND(AVG(CASE WHEN state_name = 'California'    THEN value END), 2) AS california,
-    ROUND(AVG(CASE WHEN state_name = 'Texas'         THEN value END), 2) AS texas,
-    ROUND(AVG(CASE WHEN state_name = 'Florida'       THEN value END), 2) AS florida,
-    ROUND(AVG(CASE WHEN state_name = 'New York'      THEN value END), 2) AS new_york,
-    ROUND(AVG(CASE WHEN state_name = 'Michigan'      THEN value END), 2) AS michigan,
-    ROUND(AVG(CASE WHEN state_name = 'Massachusetts' THEN value END), 2) AS massachusetts
-FROM unemployment_states_clean
-WHERE state_name IN ('{state_list}')
-GROUP BY year ORDER BY year
-\"\"\")
-print("chart_states_selected:", con_rw.execute(
-    "SELECT MIN(year), MAX(year), COUNT(*) FROM chart_states_selected"
-).fetchone())
-
-con_rw.close()
-print("\\nAll chart tables built. Switching to read-only connection.")
-"""))
-
-# ── Cell 3 — open read-only ───────────────────────────────────────────────────
-cells.append(nbformat.v4.new_code_cell("""\
+# 03-prepare is the writer; this notebook only reads. Open read-only.
 con = duckdb.connect(DB_PATH, read_only=True)
-print("Connected (read-only).")
+
+# Guard: the chart-ready tables must already exist (built by 03-prepare).
+_tables = [t[0] for t in con.execute("SHOW TABLES").fetchall()]
+_required = [
+    "chart_headline", "chart_u3_u6", "chart_race", "chart_youth",
+    "chart_state_map", "chart_states_selected", "chart_edu_race",
+]
+_missing = [t for t in _required if t not in _tables]
+assert not _missing, (
+    f"Prepared chart tables missing: {_missing}. "
+    "Run notebooks/03-prepare.ipynb first (it builds the chart_* tables)."
+)
+print("Connected (read-only). Prepared chart tables present:", _required)
 """))
 
-# ── Cell 4 — chart 1: headline rate ──────────────────────────────────────────
+# ── Cell 2 — chart 1: headline rate ──────────────────────────────────────────
 cells.append(nbformat.v4.new_markdown_cell("""\
 ## Chart 1 — U.S. Unemployment Rate, 1948–2026
 
@@ -221,7 +123,7 @@ render_chart({
 })
 """))
 
-# ── Cell 5 — chart 2: U-3 vs U-6 ────────────────────────────────────────────
+# ── Cell 3 — chart 2: U-3 vs U-6 ─────────────────────────────────────────────
 cells.append(nbformat.v4.new_markdown_cell("""\
 ## Chart 2 — Official vs Broad Unemployment (U-3 and U-6), 1994–2026
 
@@ -231,6 +133,20 @@ reasons. The **gap** between U-3 and U-6 is the "hidden unemployment."
 **Key observation:** The gap widens during recessions and shrinks during tight
 labor markets — it peaked at ~7.5 points after the Great Recession (U-6 ~17%
 vs U-3 ~9.5%). Currently (2026) the gap is ~3–4 points.
+
+**Methodology / definition markers on this chart** (vertical dashed lines) — both
+are measurement changes, not conclusions:
+
+- **1994 — CPS redesign.** The Current Population Survey was redesigned: new
+  job-search and duration questions, and the alternative U-4–U-6 measures were
+  introduced (this is why the U-6 series begins in 1994).
+- **2011 — unemployment-duration cap raised.** BLS raised the maximum recorded
+  value of the CPS unemployment-duration variable from up to 99 weeks (~2 years)
+  to up to 260 weeks (~5 years). This affects duration / long-term-unemployment
+  series, **not** the U-3 or U-6 rate *levels* shown here — it is a change to a
+  measurement variable, not a redefinition of who is counted as unemployed.
+
+Both are documented under "Methodology changes / series breaks" in `SOURCES.md`.
 """))
 
 cells.append(nbformat.v4.new_code_cell("""\
@@ -250,15 +166,19 @@ render_chart({
     "markers": False,
     "label_last": True,
     "x_tick_step": 5,
+    "vlines": [
+        {"x": 1994, "label": "1994 CPS redesign"},
+        {"x": 2011, "label": "2011 duration cap"},
+    ],
     "title": "U.S. unemployment \\u2014 official vs broad measure, 1994\\u20132026",
-    "subtitle": "Annual average. U-6 adds discouraged workers + involuntary part-timers to U-3.",
-    "source": "Bureau of Labor Statistics, CPS, retrieved 2026-09-28",
+    "subtitle": "Annual average. U-3 (official) = jobless, available, and actively looked in the last 4 weeks, as a share of the labor force. U-6 (broad) adds discouraged/marginally-attached workers plus involuntary part-timers.",
+    "source": "Markers: 1994 CPS redesign introduced U-4\\u2013U-6 and new job-search/duration questions; 2011 raised the max recorded jobless-duration from ~2 to ~5 years. BLS CPS, retrieved 2026-09-28.",
     "preset": "twitter_landscape",
     "filename": "02_u3_vs_u6",
 })
 """))
 
-# ── Cell 6 — chart 3: racial gap ─────────────────────────────────────────────
+# ── Cell 4 — chart 3: racial gap ─────────────────────────────────────────────
 cells.append(nbformat.v4.new_markdown_cell("""\
 ## Chart 3 — Unemployment Rate by Race/Ethnicity, 1973–2026
 
@@ -270,6 +190,14 @@ expansions and contractions alike.
 **Story angle:** The 2:1 Black/White ratio is one of the most persistent
 structural facts in U.S. labor economics. The COVID shock closed the gap
 temporarily (all rates spiked), but by 2021 the gap had fully reopened.
+
+**Why the gap persists (interpretation, cited):** Economists attribute the
+persistent ~2:1 gap mainly to **labor-market discrimination and occupational
+segregation**, not to differences in education — the gap holds at every
+education level, and hiring-audit studies find no decline in discrimination
+since 1989. (Sources: BLS CPS; EPI 2015, 2019; Quillian et al., PNAS 2017;
+Federal Reserve FEDS 2017-071. See `SOURCES.md` → "Interpretation sources
+(race gap)"; fuller writeup in `artifacts/race-gap-literature.md`.)
 
 **Caveat (label this on any chart):** Hispanic series begins 1973, Black 1972.
 Starts are comparable from 1973.
@@ -294,14 +222,14 @@ render_chart({
     "label_last": True,
     "x_tick_step": 10,
     "title": "Unemployment rate by race/ethnicity, 1973\\u20132026",
-    "subtitle": "Annual average U-3, seasonally adjusted. Series start dates differ; Black 1972, Hispanic 1973.",
-    "source": "Bureau of Labor Statistics, CPS, retrieved 2026-09-28",
+    "subtitle": "Annual average U-3, seasonally adjusted. Black series begins 1972, Hispanic 1973.",
+    "source": "Gap attributed mainly to labor-market discrimination and occupational segregation, not education (holds at every education level). Sources: BLS CPS; EPI 2015, 2019; Quillian et al. PNAS 2017; Fed FEDS 2017-071. Retrieved 2026-09-28.",
     "preset": "twitter_landscape",
     "filename": "03_race_gap",
 })
 """))
 
-# ── Cell 7 — quick stats: racial gap ─────────────────────────────────────────
+# ── Cell 5 — quick stats: racial gap ─────────────────────────────────────────
 cells.append(nbformat.v4.new_code_cell("""\
 # Quantify the Black/White ratio over time
 ratio_df = con.execute(\"\"\"
@@ -321,17 +249,117 @@ print(f"Min ratio: {ratio_df['black_white_ratio'].min():.2f}x ({ratio_df.loc[rat
 print(f"Max ratio: {ratio_df['black_white_ratio'].max():.2f}x ({ratio_df.loc[ratio_df['black_white_ratio'].idxmax(),'year']})")
 """))
 
-# ── Cell 8 — chart 4: youth ───────────────────────────────────────────────────
+# ── Cell 6 — chart 7: race gap by education (companion to chart 3) ───────────
 cells.append(nbformat.v4.new_markdown_cell("""\
-## Chart 4 — Youth (16–19) vs Overall Unemployment, 1948–2026
+## Chart 7 (companion to Chart 3) — Unemployment by race within education level, 25+
 
-Teen unemployment consistently runs 2–4× the overall rate. The ratio is
+This is the **companion to Chart 3** (the Black/White ~2:1 unemployment gap). It
+answers the obvious rebuttal — *"isn't the gap just an education gap?"* — by
+showing the gap **holds at every education level**. The chart is a **clustered
+vertical-column** chart: four clusters (one per education tier) along the x-axis,
+and within each cluster two adjacent columns (White, then Black) rising from a
+**single shared baseline** against one left value-axis, so the within-tier gap is
+read directly. In every tier the Black column is taller than the White column; a
+Black worker with a bachelor's degree (3.0%) has about the same unemployment rate
+as a White worker with no college at all (White some-college 3.0%). Education does
+not close the gap — which is what pushes the explanation toward labor-market
+discrimination and occupational segregation (see `artifacts/race-gap-literature.md`).
+
+**Grain note — this is NOT the same series as Charts 1–6.** It comes from BLS
+annual table **cpsaat07**: an **annual average**, population **25 years and over**,
+**not seasonally adjusted** — versus the monthly, seasonally-adjusted, 16+ series
+behind the other charts. The subtitle states this so the two are never conflated.
+
+**Footnote (option B, verbatim — shown as the caption below the chart; the
+social-ready footnote baking happens later in `06-viz-social`, out of scope here):**
+> Economists attribute the persistent ~2:1 gap mainly to labor-market
+> discrimination and occupational segregation, not to differences in education —
+> the gap holds at every education level, and hiring-audit studies find no decline
+> in discrimination since 1989. Source: BLS CPS; EPI (2015, 2019); Quillian et al.,
+> PNAS 2017; Federal Reserve FEDS 2017-071."""))
+
+cells.append(nbformat.v4.new_code_cell("""\
+# Companion chart: clustered VERTICAL columns, one cluster per education tier,
+# two adjacent bars (White, Black) per cluster rising from ONE shared baseline
+# against a single left value-axis. White = teal_mid, Black = navy (matching
+# Chart 3's race palette). Legend sits at the FAR RIGHT (legend_pos="right").
+from IPython.display import Markdown, display
+
+EDU_ORDER = [
+    "Less than high school",
+    "High school, no college",
+    "Some college or associate degree",
+    "Bachelor's degree and higher",
+]
+RACE_COLOR = {"White": c("teal_mid"), "Black": c("navy")}
+
+# Long/tidy: one row per (education tier, race). Natural tier order (NOT value
+# sorted), White then Black. Reads the prepared chart_edu_race table (built in
+# 03-prepare); values unchanged.
+edu_df = con.execute(\"\"\"
+    SELECT education_level AS tier, race AS series, unemployment_rate AS value
+    FROM chart_edu_race
+    WHERE race IN ('White', 'Black')
+    ORDER BY education_order, CASE race WHEN 'White' THEN 0 ELSE 1 END
+\"\"\").df()
+
+render_chart({
+    "type": "grouped_column_bars",            # alias: "clustered_bars"
+    "preset": "twitter_landscape",
+    "table": edu_df,                           # inline DataFrame (factory accepts df)
+    "category_col": "tier",
+    "value_col": "value",
+    "series_col": "series",
+    "series": [{"key": "White", "label": "White", "color": c("teal_mid")},
+               {"key": "Black", "label": "Black", "color": c("navy")}],
+    "category_order": EDU_ORDER,               # natural education order, NOT value-sorted
+    "legend": [{"label": "White", "color": c("teal_mid")},
+               {"label": "Black", "color": c("navy")}],
+    "legend_pos": "right",
+    "y_axis_label": "Unemployment rate (%)",
+    "value_label_fmt": lambda v: f"{v:.1f}%",
+    "label_wrap": 18,
+    "title": "Unemployment rate by race within education level, workers 25+",
+    "subtitle": "U.S. annual-average unemployment rate, 2024 \\u00b7 people 25 and older \\u00b7 "
+                "Source: BLS Current Population Survey, table cpsaat07",
+    "source": "Gap attributed mainly to labor-market discrimination and occupational segregation, not education (it holds at every education level); hiring-audit studies find no decline since 1989. Sources: BLS CPS, table cpsaat07; EPI 2015, 2019; Quillian et al. PNAS 2017; Fed FEDS 2017-071.",
+    "filename": "07_race_gap_by_education",
+})
+
+# Approved footnote (option B), rendered verbatim as the chart caption.
+display(Markdown(
+    "<span style=\\"font-size:0.85em;color:#555\\">"
+    "Economists attribute the persistent ~2:1 gap mainly to labor-market "
+    "discrimination and occupational segregation, not to differences in education "
+    "\\u2014 the gap holds at every education level, and hiring-audit studies find no "
+    "decline in discrimination since 1989. Source: BLS CPS; EPI (2015, 2019); "
+    "Quillian et al., PNAS 2017; Federal Reserve FEDS 2017-071."
+    "</span>"
+))
+"""))
+
+# ── Cell 7 — chart 4: youth vs adults 20+ ────────────────────────────────────
+cells.append(nbformat.v4.new_markdown_cell("""\
+## Chart 4 — Teens (16–19) vs Adults 20+ Unemployment, 1948–2026
+
+The comparison line is **adults 20+**, deliberately **excluding teens**, so the
+teen line is contrasted against adults only (not against a total that already
+includes teens).
+
+The adults line uses the **real combined-sex adult total** — BLS CPS series
+`LNS14000024` (Unemployment Rate, 20 years & over, seasonally adjusted), pulled
+through `01-ingest` → `02-clean`. This is a genuine BLS series with full
+1948–2026 coverage (not the overall 16+ rate, and not a men/women average).
+Labeled "Workers 20+" on the chart.
+
+Teen unemployment consistently runs 2–4× the adult rate. The ratio is
 structural — teens compete for entry-level jobs with more experienced workers
 and are first to be laid off in downturns.
 
 **Story angle:** The teen unemployment rate at its LOWEST point (~11% in 2019)
 was still above most recessions' peaks for adults.
-"""))
+
+**What the rate counts (and does not):** the unemployment rate — for both the teen 16–19 line and the adults-20+ line — is *unemployed ÷ labor force*, where the labor force is people who are employed **or** unemployed, and "unemployed" means available for work and having **actively looked in the last 4 weeks**. People who are neither working nor looking are **not in the labor force** and are excluded from both the numerator and the denominator. This matters most for teens: the teen rate is the share of teens *in the labor force* who lack a job — the majority of teens (they're in school) are not in the labor force and don't appear at all. Because teen labor-force participation is low (~35–40%), the teen denominator is small, so the teen rate swings more and must **not** be read as "X% of all teenagers are out of work." The definition of 'unemployed' is identical for teens and adults 20+; only the age bracket differs."""))
 
 cells.append(nbformat.v4.new_code_cell("""\
 render_chart({
@@ -340,8 +368,8 @@ render_chart({
     "table": "chart_youth",
     "x_col": "year",
     "series": [
-        {"col": "total",      "label": "Overall (16+)", "color": c("teal")},
-        {"col": "youth_16_19","label": "Teen (16\\u201319)", "color": c("brown_red")},
+        {"col": "adults_20plus", "label": "Workers 20+", "color": c("teal")},
+        {"col": "youth_16_19",   "label": "Teen (16\\u201319)", "color": c("brown_red")},
     ],
     "y_axis_label": "Unemployment rate (%)",
     "x_axis_label": "",
@@ -350,50 +378,105 @@ render_chart({
     "markers": False,
     "label_last": True,
     "x_tick_step": 10,
-    "title": "Teen (16\\u201319) vs overall unemployment, 1948\\u20132026",
-    "subtitle": "Annual average U-3, seasonally adjusted. Teen rate runs 2\\u20134\\u00d7 the overall rate in every year on record.",
-    "source": "Bureau of Labor Statistics, CPS, retrieved 2026-09-28",
+    "title": "Teen (16\\u201319) vs adults 20+ unemployment, 1948\\u20132026",
+    "subtitle": "Annual average U-3, seasonally adjusted. Adults 20+ = BLS series LNS14000024 (real combined-sex adult total). Teen rate runs 2\\u20134\\u00d7 the adult rate in every year on record.",
+    "source": "Rate = unemployed as a share of the labor force (working or actively looking), not of all teens; most teens are not in the labor force. Bureau of Labor Statistics, CPS, retrieved 2026-09-28",
     "preset": "twitter_landscape",
-    "filename": "04_youth_vs_total",
+    "filename": "04_youth_vs_adults",
 })
 """))
 
-# ── Cell 9 — chart 5: state rankings ─────────────────────────────────────────
+# ── Cell 8 — chart 5: state choropleth ───────────────────────────────────────
 cells.append(nbformat.v4.new_markdown_cell("""\
-## Chart 5 — State Unemployment Rates (Current Snapshot)
+## Chart 5 — State Unemployment Rate, Trailing 12-Month Average (choropleth)
 
-A ranked snapshot of all 51 state-level rates. DC and a few coastal states
-typically top the list. Plains and Mountain states tend to sit at the bottom.
+A single-month snapshot of state rates is noisy and essentially meaningless, so
+this chart maps each state's **average rate over the trailing 12 months** instead.
 
-**Story angle:** The spread from highest to lowest (~5 pp) shows how
-geographically uneven unemployment is even in a healthy national labor market.
+The window is the **12 most recent distinct monthly periods** in the data
+(Jul 2025 – Jul 2026; note 2025-10 is absent, so the 12 periods span 13 calendar
+months). 50 of 51 states have all 12 months; **Wyoming** reports only through
+Dec 2025, so its average covers 5 months — noted here and thinner than the rest.
+
+Rendered as a choropleth with a categorical bar legend: the continuous 12-month
+average is binned into five readable rate bands and shaded light→dark. The lone
+top-band state (DC) is shown as a far-right callout inset under the legend bars.
+
+**Story angle:** The spread from highest to lowest (DC ~6.4% vs South Dakota
+~2.1%) shows how geographically uneven unemployment is even in a healthy national
+labor market — and a 12-month average is a stable way to show it.
 """))
 
 cells.append(nbformat.v4.new_code_cell("""\
-# Get the reference date for the title
-ref = con.execute("SELECT MAX(year), MAX(month) FROM chart_state_current").fetchone()
-yr_ref, mo_ref = ref
-import calendar
-mo_name = calendar.month_name[mo_ref]
+# Build the choropleth geo in Python: read the US-states shapefile (shared with
+# dui-by-state), join the per-state trailing-12-month averages (the prepared
+# chart_state_map table from 03-prepare) via FIPS, and bin the rate into ordered
+# bands. The geo merge + banding + render are presentation and stay in 04; the
+# per-state rate dataset is prepared in 03. The choropleth template
+# reprojects/splits AK-HI-CONUS internally and needs the STATEFP column retained.
+import geopandas as gpd
+
+SHAPEFILE = (
+    PROJECT.parent.parent
+    / "data-projects" / "dui-by-state" / "data" / "raw" / "geo"
+    / "cb_2022_us_state_20m.shp"
+)
+geo = gpd.read_file(SHAPEFILE)
+geo = geo[~geo["STATEFP"].isin({"60", "66", "69", "72", "78"})].copy()  # 50 states + DC
+
+# Per-state trailing-12-month average + FIPS (state_ref.fips matches STATEFP).
+state_avg = con.execute(\"\"\"
+SELECT m.state_name, m.state_abbrev, m.rate, m.n_months, r.fips
+FROM chart_state_map m
+JOIN state_ref r ON r.state_name = m.state_name
+\"\"\").df()
+
+geo = geo.merge(state_avg, left_on="STATEFP", right_on="fips", how="left")
+
+# Bin the continuous 12-month-avg rate into ordered bands (percent).
+import pandas as pd
+BANDS = ["< 3.0%", "3.0\\u20133.9%", "4.0\\u20134.9%", "5.0\\u20135.9%", "\\u2265 6.0%"]
+BAND_COLORS = {
+    "< 3.0%":        c("teal_light"),   # #a8e0e0 (lightest)
+    "3.0\\u20133.9%": c("aqua"),         # #94D2BD
+    "4.0\\u20134.9%": c("teal"),         # #005F73
+    "5.0\\u20135.9%": c("teal_dark"),    # #003d5c (darkest teal)
+    "\\u2265 6.0%":   c("spice"),        # #BB3E03 rusty spice \\u2014 contrasting color so the lone top state (DC) stands out from the teal ramp
+}
+
+def _band(v):
+    if pd.isna(v):
+        return None
+    if v < 3.0:
+        return "< 3.0%"
+    if v < 4.0:
+        return "3.0\\u20133.9%"
+    if v < 5.0:
+        return "4.0\\u20134.9%"
+    if v < 6.0:
+        return "5.0\\u20135.9%"
+    return "\\u2265 6.0%"
+
+geo["rate_band"] = geo["rate"].map(_band)
+print("States per band:")
+print(geo["rate_band"].value_counts().reindex(BANDS).fillna(0).astype(int).to_string())
 
 render_chart({
-    "type": "single_ranked_bars",
-    "db": con,
-    "table": "chart_state_current",
-    "label_col": "state_abbrev",
-    "value_col": "rate",
-    "color": c("teal"),
-    "value_format": "{:.1f}%",
-    "bar_label_inside": False,
-    "title": f"State unemployment rates \\u2014 {mo_name} {yr_ref}",
-    "subtitle": "Seasonally adjusted U-3. LAUS model-based estimates, BLS.",
+    "type": "choropleth",
+    "geo": geo,
+    "category_col": "rate_band",
+    "categories": BANDS,
+    "colors": BAND_COLORS,
+    "bar_legend_title": "States per band",
+    "title": "State unemployment rate \\u2014 trailing 12-month average",
+    "subtitle": "Average of monthly rates, Jul 2025 \\u2013 Jul 2026, seasonally adjusted U-3 (LAUS). Wyoming averages 5 months (reports through Dec 2025).",
     "source": "Bureau of Labor Statistics, LAUS, retrieved 2026-09-28",
     "preset": "twitter_landscape",
-    "filename": "05_state_rankings",
+    "filename": "05_state_map",
 })
 """))
 
-# ── Cell 10 — chart 6: selected states over time ─────────────────────────────
+# ── Cell 9 — chart 6: selected states over time ──────────────────────────────
 cells.append(nbformat.v4.new_markdown_cell("""\
 ## Chart 6 — Selected States Over Time, 1976–2026
 
@@ -434,7 +517,7 @@ render_chart({
 })
 """))
 
-# ── Cell 11 — summary stats ───────────────────────────────────────────────────
+# ── Cell 10 — summary stats ──────────────────────────────────────────────────
 cells.append(nbformat.v4.new_markdown_cell("""\
 ## Key Numbers for Chart Copy
 
@@ -465,19 +548,19 @@ print("Recent U-3 vs U-6 gap:")
 print(gap.to_string(index=False))
 print()
 
-# Current state extremes
+# State extremes (trailing 12-month average)
 extremes = con.execute(\"\"\"
 SELECT state_name, state_abbrev, rate
-FROM chart_state_current
-WHERE rate = (SELECT MAX(rate) FROM chart_state_current)
-   OR rate = (SELECT MIN(rate) FROM chart_state_current)
+FROM chart_state_map
+WHERE rate = (SELECT MAX(rate) FROM chart_state_map)
+   OR rate = (SELECT MIN(rate) FROM chart_state_map)
 ORDER BY rate DESC
 \"\"\").df()
-print("Current state extremes:")
+print("State extremes (trailing 12-month average):")
 print(extremes.to_string(index=False))
 """))
 
-# ── Cell 12 — story framing notes ────────────────────────────────────────────
+# ── Cell 11 — story framing notes ────────────────────────────────────────────
 cells.append(nbformat.v4.new_markdown_cell("""\
 ## Story Framing — Candidate Angles for Social Charts
 
@@ -502,19 +585,20 @@ chart.
 **→ Third chart option.**
 
 **4. State geographic spread (Chart 5)**
-A ranked bar of current state rates — quick snapshot of geographic inequality.
+A choropleth of each state's trailing 12-month-average rate — a stable map of
+geographic inequality (a single-month snapshot was too noisy to mean much).
 **→ Good for engagement / state pride reactions.**
 
 **Suggested social lineup (owner to confirm):**
 - Chart A: Racial gap line (the lead — structural finding)
 - Chart B: U-3 vs U-6 (the "hidden unemployment" angle)
 - Chart C: Youth vs overall (the "teens always lose" angle)
-- Chart D: State current rankings (engagement/snapshot)
+- Chart D: State trailing-12-month map (engagement/geographic spread)
 
 ⏸ **Build `06-viz-social` only after owner confirms this framing.**
 """))
 
-# ── Cell 13 — cleanup ────────────────────────────────────────────────────────
+# ── Cell 12 — cleanup ────────────────────────────────────────────────────────
 cells.append(nbformat.v4.new_markdown_cell("## Cleanup"))
 cells.append(nbformat.v4.new_code_cell("""\
 con.close()

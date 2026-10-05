@@ -100,7 +100,10 @@ apples-to-oranges comparisons.
 - **Format:** JSON (API), loaded to DuckDB table `unemployment_national`
 - **License:** Public domain (U.S. government work)
 - **Fields used:** series_id, label, category, year, month, date, value (unemployment rate %)
-- **Coverage:** National, monthly, 1948–2026; breakdowns by age/sex/race begin later (see breaks)
+- **Coverage:** National, monthly, 1948–2026; breakdowns by age/sex/race begin later (see breaks).
+  Includes `LNS14000024` (Unemployment Rate, 20 years & over — the combined-sex adult total,
+  full 1948–2026 coverage), added so teen-vs-adult comparisons use a real 20+ total rather than
+  the overall 16+ rate (which includes teens).
 - **How the source collects the data:** Monthly household survey of ~60,000 U.S. households.
   Respondents are classified as employed, unemployed, or not in the labor force based on their
   reported activity during the reference week. The CPS is the gold standard for labor-force
@@ -121,8 +124,15 @@ apples-to-oranges comparisons.
   - **Black series begins January 1972.**
   - **White series begins January 1954.**
   - **1994 CPS redesign** — the most significant methodological update; introduced new questions
-    on job-search methods and duration. The BLS published bridging factors; the overall U-3 rate
-    is broadly comparable before/after but the change affects some sub-series.
+    on job-search methods and duration, and the alternative U-4…U-6 measures. The BLS published
+    bridging factors; the overall U-3 rate is broadly comparable before/after but the change
+    affects some sub-series.
+  - **2011 unemployment-duration cap raised** — BLS raised the maximum recorded value for the
+    CPS unemployment-duration variable from up to 99 weeks (~2 years) to up to 260 weeks
+    (~5 years), beginning with January 2011 data. This affects **duration / long-term-unemployment
+    series** (how long jobless spells are recorded), **not** the U-3 or U-6 rate *levels* — a
+    change to a measurement variable, not a redefinition of who counts as unemployed. (Backs the
+    Chart-2 "2011 duration cap" marker.)
   - **2003 race-category revision** — "Asian or Pacific Islander" was split; Asian and NHOPI became
     separate categories. The Asian series only begins after this change.
   - **55-64 year and 65+ year age-bracket series** (LNS14000095, LNS14000097) returned no data
@@ -136,6 +146,73 @@ apples-to-oranges comparisons.
 - **Notes:** 18 of 20 requested series returned data. All seasonally adjusted (X-13ARIMA-SEATS).
   Raw API responses saved to `data/raw/bls_api_data.parquet`.
 - **Retrieved:** 2026-09-28
+
+### BLS CPS — Unemployment by Educational Attainment and Race (annual, 25+)
+- **Publisher:** U.S. Bureau of Labor Statistics, Current Population Survey (CPS)
+- **URL:** https://www.bls.gov/cps/data/aa2024/cpsaat07.pdf (annual table cpsaat07;
+  prior years at `…/aa<YEAR>/cpsaat07.pdf`)
+- **Format:** PDF, parsed with pdfplumber by word position → DuckDB table
+  `unemployment_by_education_race`
+- **License:** Public domain (U.S. government work)
+- **Fields used:** year, race (White, Black), education_level (4 tiers),
+  unemployment_rate
+- **Coverage:** National, **annual average**, population **25 years and over**, 2024
+  (prior years available via the same `aa<YEAR>` path).
+- **How the source collects the data:** The CPS monthly household survey (~60,000
+  households) averaged to annual figures; education and race are self-reported.
+  cpsaat07 is one of the published annual household-data tables.
+- **How the source defines the data:** The **U-3** unemployment rate (same
+  definition as the project's other series — jobless, available, actively looked in
+  the last 4 weeks ÷ civilian labor force), but restricted to the **25-and-over**
+  population and reported as an **annual average, not seasonally adjusted**. The four
+  standardized education tiers are: Less than high school / High school, no college /
+  Some college or associate degree / Bachelor's degree and higher. cpsaat07 splits the
+  top two tiers into sub-columns (some-college vs associate; bachelor's-only vs
+  advanced); we use the published **TOTAL** column for each of those two tiers and
+  ignore the sub-splits (no re-derivation, no rounding drift).
+- **Methodology changes / series breaks:** This is a **DIFFERENT grain** from the
+  data behind charts 1–6 — **annual, 25+, NSA, from cpsaat07**, versus the **monthly
+  seasonally-adjusted 16+ `LN` series** used elsewhere. **The two must never be
+  plotted on the same axis or implied to be the same series.** The companion chart's
+  subtitle states "annual average · people 25 and older" to keep this explicit.
+  Education-attainment categories are stable across recent years.
+- **Known controversies / debates:** The interpretive claim this chart supports (why
+  the gap persists across education levels) is cited to EPI (2015, 2019), Quillian et
+  al. (PNAS 2017), and Federal Reserve FEDS 2017-071 — see "Interpretation sources
+  (race gap)" below. The chart itself is the data that makes that fact visible.
+- **Access note:** bls.gov `/cps/` endpoints block automated requests (Akamai 403)
+  unless a full browser header set (incl. `Referer` + `Sec-Fetch-*`) is sent; the
+  ingest helper (`fetch_bls_cps_table`) does so. Raw PDF cached verbatim in
+  `data/raw/cpsaat07_2024.pdf`.
+- **Retrieved:** 2026-10-05
+
+### Interpretation sources (race gap)
+These back the explanatory claim on **Chart 3** (why the persistent ~2:1 Black/White
+unemployment gap exists). The gap is attributed mainly to **labor-market discrimination
+and occupational segregation**, not to differences in education — it holds at every
+education level, and hiring-audit studies find no decline in discrimination since 1989.
+This is an interpretive claim layered on the BLS CPS rate data, so its sources are cited
+to meet the serious-tier citation standard. (A fuller dev-only writeup lives in
+`artifacts/race-gap-literature.md`, which is gitignored and not part of this file.)
+
+- **BLS CPS** — the underlying unemployment-rate-by-race series (see source above), and
+  the race × education cross-tab (cpsaat07) that shows the gap persists at every
+  education level (see source above).
+- **Bertrand & Mullainathan, *American Economic Review* 2004 (NBER w9873)** — the
+  landmark résumé-callback field experiment: identical résumés with Black-sounding names
+  received far fewer interview callbacks.
+- **Economic Policy Institute (EPI), 2015 and 2019** — analyses showing the Black/White
+  unemployment gap persists across education levels and over time.
+- **Quillian, Pager, Hexel & Midtbøen, *PNAS* 2017** — meta-analysis of hiring-audit
+  (résumé/callback) field experiments finding no decline in anti-Black hiring
+  discrimination since 1989.
+- **Federal Reserve, Finance and Economics Discussion Series (FEDS) 2017-071** — decomposition
+  of Black/White labor-market gaps pointing to discrimination and structural factors rather
+  than education.
+- **Federal Reserve Bank of San Francisco (FRBSF) Economic Letter, 2021** — Black (and
+  Hispanic) unemployment is a "high-beta" version of the overall labor market (falls faster
+  in downturns, recovers more slowly), which keeps the *ratio* roughly stable across the
+  cycle.
 
 ---
 
@@ -152,10 +229,16 @@ apples-to-oranges comparisons.
 - **U-4/U-5/U-6 only go back to 1994** — charts using these can't show pre-1994 history.
 - **Race breakdowns start at different years:** White 1954, Black 1972, Hispanic 1973, Asian 2003.
   Cross-race comparisons must start from the latest series' first year.
-- **1994 CPS redesign** — job-search questions changed. Rates are broadly comparable but some
-  sub-series (duration, reason) are not. Flag this on any pre/post-1994 trend chart.
+- **1994 CPS redesign** — job-search questions changed and U-4…U-6 were introduced. Rates are
+  broadly comparable but some sub-series (duration, reason) are not. Flag this on any pre/post-1994
+  trend chart.
+- **2011 duration cap** — the max recorded unemployment-duration category was raised from ~2 years
+  (99 weeks) to ~5 years (260 weeks). Affects duration/long-term-unemployment series only, not the
+  U-3/U-6 rate levels.
 - **COVID 2020** — April 2020 14.8% peak is a genuine anomaly. Not a definition break,
   but note it as anomalous on any multi-decade chart so it doesn't distort the visual range.
+- **cpsaat07 race×education table is annual / 25+ / NSA** — a different grain from the
+  monthly SA `LN` series behind charts 1–6; never splice or co-plot the two.
 
 ---
 
