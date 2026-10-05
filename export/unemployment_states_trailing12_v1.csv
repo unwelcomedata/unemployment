@@ -1,0 +1,52 @@
+state_name,state_abbrev,rate,n_months
+District of Columbia,DC,6.38,12
+California,CA,5.37,12
+Oregon,OR,5.24,12
+Nevada,NV,5.21,12
+Delaware,DE,5.16,12
+New Jersey,NJ,5.08,12
+Michigan,MI,4.98,12
+Washington,WA,4.96,12
+Illinois,IL,4.81,12
+South Carolina,SC,4.68,12
+Alaska,AK,4.63,12
+Connecticut,CT,4.61,12
+Massachusetts,MA,4.6,12
+Arizona,AZ,4.58,12
+New York,NY,4.56,12
+New Mexico,NM,4.52,12
+Florida,FL,4.45,12
+Kentucky,KY,4.44,12
+West Virginia,WV,4.42,12
+Rhode Island,RI,4.35,12
+Louisiana,LA,4.32,12
+Texas,TX,4.31,12
+Maryland,MD,4.29,12
+Minnesota,MN,4.27,12
+Pennsylvania,PA,4.26,12
+Arkansas,AR,4.23,12
+Ohio,OH,4.09,12
+Colorado,CO,3.87,12
+Missouri,MO,3.86,12
+Oklahoma,OK,3.83,12
+Kansas,KS,3.82,12
+North Carolina,NC,3.77,12
+Mississippi,MS,3.72,12
+Utah,UT,3.68,12
+Virginia,VA,3.63,12
+Idaho,ID,3.63,12
+Tennessee,TN,3.54,12
+Montana,MT,3.47,12
+Indiana,IN,3.44,12
+Georgia,GA,3.44,12
+Wyoming,WY,3.4,5
+Iowa,IA,3.35,12
+Wisconsin,WI,3.27,12
+Maine,ME,3.22,12
+New Hampshire,NH,3.09,12
+Nebraska,NE,2.98,12
+Alabama,AL,2.86,12
+Vermont,VT,2.63,12
+North Dakota,ND,2.5,12
+Hawaii,HI,2.32,12
+South Dakota,SD,2.14,12

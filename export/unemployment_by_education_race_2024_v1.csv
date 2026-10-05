@@ -1,0 +1,9 @@
+year,education_level,education_order,race,unemployment_rate
+2024,Less than high school,0,White,5.7
+2024,Less than high school,0,Black,9.5
+2024,"High school, no college",1,White,3.7
+2024,"High school, no college",1,Black,6.7
+2024,Some college or associate degree,2,White,3.0
+2024,Some college or associate degree,2,Black,4.7
+2024,Bachelor's degree and higher,3,White,2.1
+2024,Bachelor's degree and higher,3,Black,3.0

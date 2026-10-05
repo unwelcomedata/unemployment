@@ -1,46 +1,34 @@
-# Scripts — Pipeline Run Order
+# Scripts — reproduce & validate
 
-Full rebuild from raw data to export. Each step depends on the previous.
+Two scripts make the published numbers verifiable end to end.
 
-## Prerequisites
+## reproduce.py — raw → export (the reproducibility entrypoint)
 
-- Python 3.11+ with packages from `requirements.txt`
-- `data/raw/` populated with source files (see SOURCES.md)
-- Playwright + Chromium installed if any source uses `js_render: true`
+Rebuilds every published dataset from the original BLS sources with one command:
 
-## Run order
+    python scripts/reproduce.py                 # full run → real DB + export/
+    python scripts/reproduce.py --no-download    # offline (fails if raw files missing)
+    python scripts/reproduce.py --formats csv    # only the CSV (+ codebook)
+    # scratch verify (does not touch the committed DB/exports):
+    python scripts/reproduce.py --no-download --db /tmp/x.duckdb --export-dir /tmp/exp
 
-```bash
-# 1. Ingestion — fetch all sources → data/raw/ → DuckDB tables
-python scripts/ingest_all.py
+Pipeline: ingest (BLS CPS API + LAUS + cpsaat07 PDF) → load to DuckDB → clean →
+prepare → export. On the first run it downloads sources into data/raw/ (URLs in
+SOURCES.md); after that it runs offline from the cache. Logic lives in src/
+(ingest.py, clean_quality.py, prepare.py).
 
-# 2. Cleaning — standardize raw tables → data/interim/ (Parquet)
-python scripts/clean_all.py
+## validate_charts.py — pre-publish data gate
 
-# 3. Export — join clean tables → export/ (CSV, Excel, Parquet + codebook)
-python scripts/prepare_export.py
-```
+Re-derives what each published chart shows straight from DuckDB and confirms the
+exports match, the headline facts hold, and structural invariants hold. Exit 0 =
+safe to publish; non-zero = do not publish (it prints the failing check).
 
-## Conventions
+    python scripts/validate_charts.py
 
-- **One script per pipeline stage.** Don't accumulate one-off scripts — if logic
-  is absorbed into a main script, delete the original.
-- **Only the current export version lives in `export/`.** Tag old versions in git.
-- **Interim parquets must 1:1 match their DuckDB table names.** When you rename a
-  table, rename or delete the corresponding parquet.
-- **Document run order here** whenever you add a new script.
+## Run order & interpreter
 
-## Script descriptions
+1. python scripts/reproduce.py       # build raw → export
+2. python scripts/validate_charts.py # confirm exit 0
 
-| Script | Purpose | Inputs | Outputs |
-|--------|---------|--------|---------|
-| `ingest_all.py` | Fetch and load all data sources | `config.yaml`, web | DuckDB tables, `data/raw/` |
-| `clean_all.py` | Standardize and quality-check | DuckDB raw tables | `data/interim/*.parquet` |
-| `prepare_export.py` | Build final joined dataset | DuckDB clean tables | `export/*` |
-
-## Adding a new script
-
-1. Add it to the run-order table above
-2. Ensure it reads from DuckDB (not from other scripts' intermediate files)
-3. Ensure it writes its output to DuckDB and/or interim parquet
-4. Update the `_sources` metadata table if ingesting new data
+Run with Python 3.11+ and the packages in requirements.txt (duckdb, pandas,
+pyarrow, requests, beautifulsoup4, lxml, pdfplumber, openpyxl, pyyaml, Pillow).
