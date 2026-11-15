@@ -205,9 +205,9 @@ def build_tall(d, F):
 
   <!-- S1 — Black/White ratio -->
   {t(80,372,"A Black\u2013White gap that has held for 50 years",34,NAVY,"bold")}
-  {t(80,406,f"Black unemployment rate \u00f7 White unemployment rate, each year {d['ratio'][0][0]}\u2013{d['ratio'][-1][0]}; the big number is the average of the yearly ratios.",22,GREY)}
+  {t(80,406,f"Black unemployment rate \u00f7 White unemployment rate, each year {d['ratio'][0][0]}\u2013{d['ratio'][-1][0]}.",22,GREY)}
   {t(80,508,f"{F['mean_r']:.1f}\u00d7",96,SPICE,"bold")}
-  {t(80,540,"average ratio, 1973\u20132026",22,GREY)}
+  {t(80,540,"average of the yearly ratios",22,GREY)}
   {t(1120,508,f"{F['last_r']:.1f}\u00d7",96,NAVY,"bold",anchor="end")}
   {t(1120,540,f"in {F['last_y']}",22,GREY,anchor="end")}
   {grid1}
@@ -248,7 +248,7 @@ def build_tall(d, F):
   {state_grid}
   {state_bars(d, 130, 19.2, 14, 2640, ys4)}
   <line x1="120" y1="2640" x2="1120" y2="2640" stroke="{GREY}" stroke-width="2"/>
-  {t(137,ys4(F['st_top'][1])-10,f"{F['st_top'][0]} {F['st_top'][1]:.1f}",18,SPICE,"bold",anchor="middle")}{t(130+50*19.2+7,ys4(F['st_bot'][1])-10,f"{F['st_bot'][0]} {F['st_bot'][1]:.1f}",18,TEAL,"bold",anchor="end")}
+  {t(137,ys4(F['st_top'][1])-10,f"{F['st_top'][0]} {F['st_top'][1]:.1f}",18,SPICE,"bold",anchor="middle")}
   {band_legend}
   {t(80,2724,f"Median state: {F['st_med']:.1f}%. Wyoming has only 5 months of data in the trailing window.",20,GREY)}
   <line x1="80" y1="2760" x2="1120" y2="2760" stroke="{VANILLA}" stroke-width="3"/>
