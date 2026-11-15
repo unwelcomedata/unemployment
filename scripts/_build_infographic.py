@@ -170,12 +170,17 @@ def build_tall(d, F):
                     + t(135, ys2(v) + 6, str(v), 18, GREY, anchor="end") for v in (2, 4, 6, 8))
     ticks2 = "".join(t(xs2(y), 1448, str(y), 18, GREY, anchor="middle") for y in (2000, 2010, 2020))
     # S3 comb
-    xs3 = Lin(1948, 2026, 150, 1120); ys3 = Lin(0, 30, 1980, 1700)
+    xs3 = Lin(1948, 2026, 150, 1120); ys3 = Lin(0, 30, 1980, 1735)
     grid3 = "".join(f'<line x1="150" y1="{f(ys3(v))}" x2="1120" y2="{f(ys3(v))}" stroke="#E5E0D0" stroke-width="1.5"/>'
                     + t(135, ys3(v) + 6, f"{v}%", 18, GREY, anchor="end") for v in (10, 20, 30))
     ticks3 = "".join(t(xs3(y), 2008, str(y), 18, GREY, anchor="middle") for y in (1960, 1980, 2000, 2020))
     # S4 states
-    ys4 = Lin(0, 7, 2640, 2420)
+    ys4 = Lin(0, 7, 2640, 2350)
+    state_grid = "".join(f'<line x1="120" y1="{f(ys4(v))}" x2="1120" y2="{f(ys4(v))}" stroke="#E5E0D0" stroke-width="1.5"/>'
+                         + t(108, ys4(v) + 6, f"{v}%", 18, GREY, anchor="end") for v in (2, 4, 6))
+    bc = {n: sum(1 for _, r, _ in d["states"] if lo <= r < hi) for n, lo, hi, _ in BAND}
+    band_legend = "".join(f'<rect x="{130+i*200}" y="2662" width="18" height="18" fill="{c}"/>' + t(154 + i * 200, 2678, f"{n} ({bc[n]})", 18, GREY)
+                          for i, (n, lo, hi, c) in enumerate(BAND))
     # S5 education
     xs5 = Lin(0, 10, 520, 1010)
     grid5 = "".join(f'<line x1="{f(xs5(v))}" y1="3000" x2="{f(xs5(v))}" y2="3270" stroke="#E5E0D0" stroke-width="1.5"/>'
@@ -200,7 +205,7 @@ def build_tall(d, F):
 
   <!-- S1 — Black/White ratio -->
   {t(80,372,"A Black\u2013White gap that has held for 50 years",34,NAVY,"bold")}
-  {t(80,406,f"Black unemployment rate \u00f7 White unemployment rate, each year {d['ratio'][0][0]}\u2013{d['ratio'][-1][0]} (annual averages).",22,GREY)}
+  {t(80,406,f"Black unemployment rate \u00f7 White unemployment rate, each year {d['ratio'][0][0]}\u2013{d['ratio'][-1][0]}; the big number is the average of the yearly ratios.",22,GREY)}
   {t(80,508,f"{F['mean_r']:.1f}\u00d7",96,SPICE,"bold")}
   {t(80,540,"average ratio, 1973\u20132026",22,GREY)}
   {t(1120,508,f"{F['last_r']:.1f}\u00d7",96,NAVY,"bold",anchor="end")}
@@ -220,7 +225,7 @@ def build_tall(d, F):
   {t(1120,1098,f"{F['u6']:.2f}%",64,SPICE,"bold",anchor="end")}{t(1120,1128,f"broad U-6, {F['uy']}",22,GREY,anchor="end")}
   {grid2}
   {gap_bars(d, xs2, ys2, 1420, 22)}
-  {t(xs2(F['gpk'])+22, ys2(F['gpkv'])+8, f"{F['gpkv']:.2f} pts ({F['gpk']})", 18, "#CA6702", "bold")}
+  {t(xs2(F['gpk']), ys2(F['gpkv'])-10, f"{F['gpkv']:.2f} ({F['gpk']})", 18, "#CA6702", "bold", anchor="middle")}
   {ticks2}
   {t(80,1490,f"The gap widens in downturns (2001\u201303, 2008\u201310, 2020) and has run {F['gmnv']:.1f}\u2013{F['gpkv']:.1f} points since 1994.",20,GREY)}
   <line x1="80" y1="1530" x2="1120" y2="1530" stroke="{VANILLA}" stroke-width="3"/>
@@ -240,15 +245,17 @@ def build_tall(d, F):
   {t(80,2196,"Trailing-12-month unemployment rate for all 51 states and DC, ranked.",22,GREY)}
   {t(80,2262,f"{F['st_top'][1]:.1f}%",64,SPICE,"bold")}{t(250,2262,f"{F['st_top'][0]} is the only place at or above 6%",22,GREY)}
   {t(1120,2262,f"{F['st_bot'][1]:.1f}%",64,TEAL,"bold",anchor="end")}{t(1120,2292,f"lowest: {F['st_bot'][0]}",22,GREY,anchor="end")}
+  {state_grid}
   {state_bars(d, 130, 19.2, 14, 2640, ys4)}
   <line x1="120" y1="2640" x2="1120" y2="2640" stroke="{GREY}" stroke-width="2"/>
-  {t(130,2670,f"{F['st_top'][0]}",18,SPICE,"bold")}{t(1105,2670,f"{F['st_bot'][0]}",18,TEAL,"bold",anchor="end")}
-  {t(80,2720,f"Median state: {F['st_med']:.1f}%. Wyoming has only 5 months of data in the trailing window.",20,GREY)}
+  {t(137,ys4(F['st_top'][1])-10,f"{F['st_top'][0]} {F['st_top'][1]:.1f}",18,SPICE,"bold",anchor="middle")}{t(130+50*19.2+7,ys4(F['st_bot'][1])-10,f"{F['st_bot'][0]} {F['st_bot'][1]:.1f}",18,TEAL,"bold",anchor="end")}
+  {band_legend}
+  {t(80,2724,f"Median state: {F['st_med']:.1f}%. Wyoming has only 5 months of data in the trailing window.",20,GREY)}
   <line x1="80" y1="2760" x2="1120" y2="2760" stroke="{VANILLA}" stroke-width="3"/>
 
   <!-- S5 — education -->
   {t(80,2832,"More education doesn't close the gap",34,NAVY,"bold")}
-  {t(80,2866,"Unemployment rate by education, White (teal) vs Black (orange) workers, 2024. Right column = Black \u00f7 White.",22,GREY)}
+  {t(80,2866,"2024 unemployment rate by education: White (teal) vs Black (orange); right = ratio.",22,GREY)}
   {t(80,2930,f"{e[3]['Black']:.1f}% = {e[2]['White']:.1f}%",52,NAVY,"bold")}
   {t(80,2962,"A Black worker with a bachelor\u2019s degree has the same rate as a White worker with some college.",20,GREY)}
   {grid5}
@@ -256,7 +263,7 @@ def build_tall(d, F):
 
   <rect x="0" y="{H-90}" width="{W}" height="90" fill="{NAVY}"/>
   {t(80,H-45,"@unwelcomedata",24,"#FFFFFF","bold")}
-  {t(80,H-15,"BLS CPS &amp; LAUS \u00b7 seasonally adjusted \u00b7 U-6 starts 1994 (CPS redesign); 2011 duration cap. Black/White ratio is mean of annual rates.".replace("&amp;","&"),18,AQUA)}
+  {t(80,H-15,"BLS CPS &amp; LAUS \u00b7 seasonally adjusted \u00b7 U-6 starts 1994 (CPS redesign); 2011 duration cap.".replace("&amp;","&"),18,AQUA)}
 </svg>
 '''
     return svg, H
@@ -265,15 +272,15 @@ def build_tall(d, F):
 # ───────────────────────── SOCIAL ─────────────────────────
 def build_social(d, F):
     W, H = 1600, 900
-    xs1 = Lin(1973, 2026, 120, 760); ys1 = Lin(1.0, 3.0, 440, 300)
+    xs1 = Lin(1973, 2026, 120, 760); ys1 = Lin(1.0, 3.0, 456, 312)
     grid1 = "".join(f'<line x1="120" y1="{f(ys1(v))}" x2="760" y2="{f(ys1(v))}" stroke="{"#CBB477" if v==2 else "#E5E0D0"}" '
                     f'stroke-width="{2 if v==2 else 1.5}" {"stroke-dasharray=\"6 5\"" if v==2 else ""}/>'
                     + t(108, ys1(v) + 5, f"{v:.0f}\u00d7", 15, GREY, anchor="end") for v in (1, 2, 3))
-    ticks1 = "".join(t(xs1(y), 462, str(y), 15, GREY, anchor="middle") for y in (1980, 2000, 2020))
-    xs2 = Lin(1994, 2026, 910, 1500); ys2 = Lin(0, 8, 470, 320)
+    ticks1 = "".join(t(xs1(y), 476, str(y), 15, GREY, anchor="middle") for y in (1980, 2000, 2020))
+    xs2 = Lin(1994, 2026, 910, 1500); ys2 = Lin(0, 8, 476, 316)
     grid2 = "".join(f'<line x1="880" y1="{f(ys2(v))}" x2="1520" y2="{f(ys2(v))}" stroke="#E5E0D0" stroke-width="1.5"/>'
                     + t(868, ys2(v) + 5, str(v), 15, GREY, anchor="end") for v in (2, 4, 6, 8))
-    ticks2 = "".join(t(xs2(y), 492, str(y), 15, GREY, anchor="middle") for y in (2000, 2010, 2020))
+    ticks2 = "".join(t(xs2(y), 496, str(y), 15, GREY, anchor="middle") for y in (2000, 2010, 2020))
     xs3 = Lin(1948, 2026, 910, 1520); ys3 = Lin(0, 30, 760, 590)
     grid3 = "".join(f'<line x1="880" y1="{f(ys3(v))}" x2="1520" y2="{f(ys3(v))}" stroke="#E5E0D0" stroke-width="1.5"/>'
                     + t(868, ys3(v) + 5, f"{v}%", 15, GREY, anchor="end") for v in (10, 20, 30))
@@ -298,16 +305,14 @@ def build_social(d, F):
 
   <!-- LEFT TOP — ratio -->
   {t(80,256,"A Black\u2013White gap that has held for 50 years",28,NAVY,"bold")}
-  {t(80,284,"Black rate \u00f7 White rate, each year 1973\u20132026.",19,GREY)}
-  {t(80,350,f"{F['mean_r']:.1f}\u00d7",54,SPICE,"bold")}{t(210,350,"average",20,GREY)}
-  {t(760,350,f"{F['last_r']:.1f}\u00d7",54,NAVY,"bold",anchor="end")}{t(640,350,f"in {F['last_y']}",20,GREY,anchor="end")}
+  {t(80,284,f"Black rate \u00f7 White rate each year: {F['mean_r']:.1f}\u00d7 on average, {F['last_r']:.1f}\u00d7 in {F['last_y']}.",19,GREY)}
   {grid1}
   {ratio_marks(d, xs1, ys1, 4.2, 2.4)}
   {t(xs1(ymx)-9, ys1(F['rmax'])-7, f"{F['rmax']:.2f}", 15, "#CA6702", "bold", anchor="end")}
   {t(xs1(ymn)-9, ys1(F['rmin'])+24, f"{F['rmin']:.2f} ({ymn})", 15, "#CA6702", "bold", anchor="end")}
   {ticks1}
-  {t(80,492,f"2-to-1 or more in {F['n2']} of {F['n']} years; never under 1.5-to-1.",18,GREY)}
-  <line x1="80" y1="516" x2="760" y2="516" stroke="{VANILLA}" stroke-width="3"/>
+  {t(80,502,f"2-to-1 or more in {F['n2']} of {F['n']} years; never under 1.5-to-1.",18,GREY)}
+  <line x1="80" y1="522" x2="760" y2="522" stroke="{VANILLA}" stroke-width="3"/>
 
   <!-- LEFT BOTTOM — education -->
   {t(80,552,"More education doesn't close it",28,NAVY,"bold")}
@@ -317,14 +322,12 @@ def build_social(d, F):
 
   <!-- RIGHT TOP — hidden -->
   {t(840,256,"What the official rate leaves out",28,NAVY,"bold")}
-  {t(840,284,"U-6 minus U-3, in points, 1994\u20132026.",19,GREY)}
-  {t(840,350,f"{F['u3']:.2f}%",46,TEAL,"bold")}{t(1020,350,f"U-3 in {F['uy']}",19,GREY)}
-  {t(1520,350,f"{F['u6']:.2f}%",46,SPICE,"bold",anchor="end")}{t(1330,350,f"U-6 in {F['uy']}",19,GREY,anchor="end")}
+  {t(840,284,f"U-6 minus U-3, in points. In {F['uy']}: U-3 {F['u3']:.2f}%, U-6 {F['u6']:.2f}%.",19,GREY)}
   {grid2}
-  {gap_bars(d, xs2, ys2, 470, 14)}
-  {t(xs2(F['gpk'])+14, ys2(F['gpkv'])+6, f"{F['gpkv']:.2f} ({F['gpk']})", 15, "#CA6702", "bold")}
+  {gap_bars(d, xs2, ys2, 476, 14)}
+  {t(xs2(F['gpk']), ys2(F['gpkv'])-8, f"{F['gpkv']:.2f} ({F['gpk']})", 15, "#CA6702", "bold", anchor="middle")}
   {ticks2}
-  <line x1="840" y1="516" x2="1520" y2="516" stroke="{VANILLA}" stroke-width="3"/>
+  <line x1="840" y1="522" x2="1520" y2="522" stroke="{VANILLA}" stroke-width="3"/>
 
   <!-- RIGHT BOTTOM — teens -->
   {t(840,552,"Teenagers carry several times the adult rate",28,NAVY,"bold")}
@@ -353,11 +356,11 @@ def validate(d, F, tall, social):
 
     sp = {
         "tall": dict(svg=tall, rs=Lin(1.0, 3.0, 800, 590), rx=Lin(1973, 2026, 150, 1120),
-                     gy=Lin(0, 8, 1420, 1180), gx=Lin(1994, 2026, 165, 1105), cy=Lin(0, 30, 1980, 1700),
-                     cx=Lin(1948, 2026, 150, 1120), sy=Lin(0, 7, 2640, 2420), ex=Lin(0, 10, 520, 1010), sx0=130, sp=19.2, base_gap=1420),
-        "social": dict(svg=social, rs=Lin(1.0, 3.0, 440, 300), rx=Lin(1973, 2026, 120, 760),
-                       gy=Lin(0, 8, 470, 320), gx=Lin(1994, 2026, 910, 1500), cy=Lin(0, 30, 760, 590),
-                       cx=Lin(1948, 2026, 910, 1520), sy=None, ex=Lin(0, 10, 330, 640), sx0=None, sp=None, base_gap=470),
+                     gy=Lin(0, 8, 1420, 1180), gx=Lin(1994, 2026, 165, 1105), cy=Lin(0, 30, 1980, 1735),
+                     cx=Lin(1948, 2026, 150, 1120), sy=Lin(0, 7, 2640, 2350), ex=Lin(0, 10, 520, 1010), sx0=130, sp=19.2, base_gap=1420),
+        "social": dict(svg=social, rs=Lin(1.0, 3.0, 456, 312), rx=Lin(1973, 2026, 120, 760),
+                       gy=Lin(0, 8, 476, 316), gx=Lin(1994, 2026, 910, 1500), cy=Lin(0, 30, 760, 590),
+                       cx=Lin(1948, 2026, 910, 1520), sy=None, ex=Lin(0, 10, 330, 640), sx0=None, sp=None, base_gap=476),
     }
     ratio = dict(d["ratio"]); gap = dict(d["gap"]); yth = {y: (a, tn) for y, a, tn in d["youth"]}
     edu = {}
