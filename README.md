@@ -16,9 +16,13 @@ and how it varies across states.
   discouraged workers and involuntary part-timers — runs several points higher, and
   the gap between them widens sharply in every recession. That gap is "hidden"
   unemployment.
-- **Teenagers are unemployed at 2–4× the adult rate, in every year on record.**
+- **Teenagers are unemployed at more than twice the adult rate in every year on record** (2.3× to 4.6×, about 3.3× on average).
 - **State rates vary widely**, and on a trailing-12-month average the District of
   Columbia is the lone jurisdiction at or above 6%.
+
+---
+
+[![Unemployment infographic](docs/infographic_unemployment.png)](docs/infographic_unemployment.png)
 
 ---
 
@@ -53,10 +57,10 @@ Sources: BLS CPS; EPI 2015, 2019; Quillian et al. PNAS 2017; Fed FEDS 2017-071.
 U-3, seasonally adjusted. Important: the rate is unemployed as a share of the **labor
 force** (people working or actively looking), **not** of all teens — most teens are in
 school and not in the labor force, so this is not "X% of all teenagers are out of
-work." The teen rate runs 2–4× the adult rate in every year on record. The **1994**
+work." The teen rate runs at least twice the adult rate in every year on record (2.3× to 4.6×, about 3.3× on average). The **1994**
 and **2011** markers are the same two measurement changes as above. Source: BLS CPS.
 
-[![Line chart comparing the U.S. teen (16–19) unemployment rate against the rate for workers 20 and older, with the teen line running two to four times higher throughout.](docs/03_youth_vs_adults.png)](docs/03_youth_vs_adults.png)
+[![Line chart comparing the U.S. teen (16–19) unemployment rate against the rate for workers 20 and older, with the teen line running at least twice as high in every year.](docs/03_youth_vs_adults.png)](docs/03_youth_vs_adults.png)
 
 **Unemployment by state.** A **trailing 12-month average** of each state's monthly
 seasonally-adjusted U-3 rate (LAUS), window Jul 2025 – Jul 2026 (12 distinct monthly
